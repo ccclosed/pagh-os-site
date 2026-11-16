@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="nord">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pagh — 64-битное ядро ОС на Rust: ext2+WAL, свой TCP/IP, framebuffer-GUI</title>
+<meta name="description" content="Pagh-OS — небольшое 64-битное ядро на Rust (#![no_std]): загрузка через Limine на UEFI, ext2 с WAL-журналом, собственный стек TCP/IP, framebuffer-консоль, paint, nano+, Linux-бинарники и apt по HTTPS в ring 3.">
+<meta name="theme-color" content="#191c23">
+<meta property="og:title" content="pagh — ОС на Rust, которая загружается на реальном UEFI">
+<meta property="og:description" content="ext2 + WAL, свой dual-stack TCP/IP, framebuffer-GUI, paint, nano+, Linux-бинарники и apt по HTTPS. Соберите и запустите в QEMU одной командой.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://raw.githubusercontent.com/ccclosed/Pagh-OS/main/docs/paint.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' fill='%23191c23'/%3E%3Cg fill='%2381a1c1'%3E%3Crect x='4' y='4' width='4' height='4'/%3E%3Crect x='4' y='8' width='4' height='4'/%3E%3Crect x='4' y='12' width='4' height='4'/%3E%3Crect x='8' y='4' width='4' height='4'/%3E%3Crect x='12' y='8' width='4' height='4'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preload" href="assets/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">К содержимому</a>
+
+<!-- ── nav ─────────────────────────────────────────────────────────────── -->
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top" aria-label="pagh — на главную">
+      <svg class="brand-mark" viewBox="0 0 20 20" aria-hidden="true">
+        <g fill="currentColor">
+          <rect x="2" y="2" width="4" height="4"/><rect x="2" y="6" width="4" height="4"/>
+          <rect x="2" y="10" width="4" height="4"/><rect x="2" y="14" width="4" height="4"/>
+          <rect x="6" y="2" width="4" height="4"/><rect x="10" y="2" width="4" height="4"/>
+          <rect x="14" y="6" width="4" height="4"/><rect x="6" y="10" width="4" height="4"/>
+          <rect x="10" y="10" width="4" height="4"/><rect x="14" y="10" width="4" height="4"/>
+        </g>
+      </svg>
+      <span>pagh</span>
+      <span class="ver">v2.22.9</span>
+    </a>
+
+    <nav class="nav-links" aria-label="Основная навигация">
+      <a href="#about">Обзор</a>
+      <a href="#features">Возможности</a>
+      <a href="#shots">Скриншоты</a>
+      <a href="#arch">Архитектура</a>
+      <a href="#install">Сборка</a>
+    </nav>
+
+    <div class="nav-right">
+      <button class="theme-btn" type="button" data-theme-cycle title="Переключить тему (T)">
+        <span class="theme-dot" aria-hidden="true"></span>
+        <span class="label">тема: <span data-theme-name>nord</span></span>
+        <span class="short" aria-hidden="true">T</span>
+      </button>
+      <a class="icon-btn" href="https://github.com/ccclosed/Pagh-OS" target="_blank" rel="noopener" aria-label="GitHub репозиторий Pagh-OS">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      </a>
+      <a class="btn" href="https://github.com/ccclosed/Pagh-OS/releases/tag/2.18.12-demo" target="_blank" rel="noopener">
+        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 2v8m0 0 3-3m-3 3L5 7M2.5 12.5v1h11v-1"/></svg>
+        <span class="label">Демо</span>
+      </a>
+      <button class="icon-btn nav-toggle" type="button" aria-label="Меню" aria-expanded="false" data-nav-toggle>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<!-- ── hero ────────────────────────────────────────────────────────────── -->
+<section class="hero" id="top">
+  <div class="hero-pixels" aria-hidden="true"></div>
+
+  <div class="wrap hero-inner">
+    <a class="announce" href="https://github.com/ccclosed/Pagh-OS/blob/main/CHANGELOG.md" target="_blank" rel="noopener">
+      <span><b>pagh 2.22.9</b> — Linux-бинарники, CPython 3.16 и apt по HTTPS</span>
+      <span class="arrow" aria-hidden="true">→</span>
+    </a>
+
+    <h1>Маленькое ядро.<br>Настоящая ОС.<span class="cursor" aria-hidden="true"></span></h1>
+
+    <p class="sub">
+      Pagh-OS — <b>64-битное ядро на Rust</b> (<code>#![no_std]</code>), которое загружается через
+      Limine на реальном UEFI. Своя ext2 с журналом <b>write-ahead-log</b>, собственный стек
+      <b>TCP/IP</b>, framebuffer-GUI с paint и nano+, <b>Linux-бинарники</b> и apt с проверкой
+      OpenPGP-подписей Debian — всё в одном дереве исходников.
+    </p>
+
+    <div class="hero-actions">
+      <a class="btn" href="https://github.com/ccclosed/Pagh-OS/releases/tag/2.18.12-demo" target="_blank" rel="noopener">
+        <svg class="ico" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5-9-5.5Z"/></svg>
+        Запустить демо
+      </a>
+      <a class="btn btn-ghost" href="#shots">Смотреть скриншоты →</a>
+    </div>
+
+    <p class="hero-hint">одна команда · qemu-system-x86_64 + OVMF · тулчейн Rust не нужен</p>
+  </div>
+
+  <div class="terminal" role="img" aria-label="Лог загрузки pagh в QEMU">
+    <div class="terminal-bar">
+      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="title">pagh — boot · QEMU/OVMF</span>
+      <span class="right">framebuffer 1280×800</span>
+    </div>
+    <pre class="terminal-body"><span class="info">[INFO]</span> serial
+<span class="info">[INFO]</span> base revision
+<span class="info">[INFO]</span> limine responses
+<span class="info">[INFO]</span> gdt + idt
+<span class="info">[INFO]</span> syscalls
+<span class="info">[INFO]</span> pmm
+<span class="info">[INFO]</span> vmm
+<span class="info">[INFO]</span> heap
+<span class="info">[INFO]</span> apic
+<span class="info">[INFO]</span> drivers
+<span class="info">[INFO]</span> virtio
+<span class="info">[INFO]</span> scheduler
+<span class="info">[INFO]</span> vfs
+<span class="info">[INFO]</span> ext2 mounted at /mnt
+<span class="info">[INFO]</span> net
+<span class="ok">Hello from ring3 user process!</span>
+<span class="info">[INFO]</span> interrupts enabled
+<span class="info">[INFO]</span> net: DHCP lease acquired: 10.0.2.15/24 gw 10.0.2.2
+========================================
+&nbsp;&nbsp; Welcome to pagh OS Shell!
+========================================
+Type 'help' for available commands
+<span class="prompt">pagh:/&gt;</span> <span class="caret" aria-hidden="true"></span></pre>
+  </div>
+  <div class="terminal-caption">
+    <span>24 с реальной загрузки QEMU/OVMF: boot → shell → paint → nano+ → темы.</span>
+    <a href="https://github.com/ccclosed/Pagh-OS/blob/main/docs/demo.mp4" target="_blank" rel="noopener">demo.mp4 ↗</a>
+  </div>
+</section>
+
+<!-- ── about ───────────────────────────────────────────────────────────── -->
+<section class="section" id="about">
+  <div class="wrap intro-grid">
+    <div class="prose reveal">
+      <span class="eyebrow">что это</span>
+      <h2>Небольшое ядро. Без магии и без smoltcp.</h2>
+      <p>
+        pagh поднимает serial, GDT/IDT, битмапный менеджер физической памяти, 4-уровневый
+        пейджинг, кучу, APIC, PS/2- и USB-ввод, framebuffer-консоль с программным курсором,
+        виртуальную файловую систему, загрузчик ELF64, вытесняющий планировщик и интерфейс
+        <strong>SYSCALL / int 0x80</strong> — по одной подсистеме за раз.
+      </p>
+      <p>
+        Всё, что обычно приходит «из коробки», здесь написано с нуля: сетевой стек (IPv4/IPv6,
+        TCP с SACK и window scaling, DHCP, DNS, NDP/SLAAC), драйверы e1000, virtio-blk, NVMe
+        и xHCI, ext2 с журналом, пакетный менеджер с проверкой подписанных метаданных Debian
+        и слой совместимости с Linux-сисколлами, в котором работает <strong>CPython 3.16</strong>.
+      </p>
+      <p>
+        Цель — не догнать Linux, а показать операционную систему целиком: каждая подсистема
+        документирует себя в <code>src/&lt;подсистема&gt;/README.md</code> — дизайн, инварианты,
+        тесты и честные ограничения.
+      </p>
+    </div>
+
+    <div class="reveal">
+      <aside class="quote-card">
+        <div class="mark" aria-hidden="true">“</div>
+        <blockquote>Хобби/учебное ядро — не граница безопасности. Не запускайте недоверенные бинарники и не выставляйте это ядро в сеть, которую не контролируете.</blockquote>
+        <div class="who">
+          <span class="avatar" aria-hidden="true">cc</span>
+          <span><b>ccclosed</b>README.md</span>
+          <a href="https://github.com/ccclosed/Pagh-OS/blob/main/SECURITY.md" target="_blank" rel="noopener" aria-label="Модель безопасности">↗</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ── install ─────────────────────────────────────────────────────────── -->
+<section class="section" id="install">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <span class="eyebrow">установка</span>
+        <h2>Или сначала попробовать</h2>
+        <p class="lede">Быстрее всего — готовый демо-образ: тулчейн Rust не нужен, только <code>qemu-system-x86_64</code> и OVMF.</p>
+      </div>
+      <a class="link-more" href="https://github.com/ccclosed/Pagh-OS#быстрый-старт" target="_blank" rel="noopener">Полный гайд →</a>
+    </div>
+
+    <div class="install-grid">
+      <article class="card reveal">
+        <div class="card-head">
+          <span class="glyph" aria-hidden="true">▚</span>
+          <h3>Демо-образ</h3>
+          <span class="meta">x86_64 · QEMU</span>
+        </div>
+        <p>Загрузочный образ из релиза: внутри shell, paint, nano+ и темы. Скачали — запустили.</p>
+        <div class="code">
+          <button class="copy" type="button">копировать</button>
+          <pre><code>tar xzf pagh-demo-x86_64.tar.gz
+cd pagh-demo-x86_64
+./run.sh</code></pre>
+        </div>
+        <a class="btn btn-wide" href="https://github.com/ccclosed/Pagh-OS/releases/tag/2.18.12-demo" target="_blank" rel="noopener">
+          <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 2v8m0 0 3-3m-3 3L5 7M2.5 12.5v1h11v-1"/></svg>
+          Скачать demo bundle
+        </a>
+        <div class="card-links">
+          <a href="https://github.com/ccclosed/Pagh-OS/releases/tag/2.18.12-demo" target="_blank" rel="noopener">релиз</a>
+          <a href="https://github.com/ccclosed/Pagh-OS/blob/main/docs/demo.mp4" target="_blank" rel="noopener">видео</a>
+          <a href="https://github.com/ccclosed/Pagh-OS#быстрый-старт" target="_blank" rel="noopener">что внутри</a>
+        </div>
+      </article>
+
+      <article class="card reveal">
+        <div class="card-head">
+          <span class="glyph" aria-hidden="true">⌗</span>
+          <h3>Из исходников</h3>
+          <span class="meta">Linux · macOS? · bash</span>
+        </div>
+        <p>Rust nightly с <code>rust-src</code> для build-std, QEMU и OVMF в <code>PATH</code>. Limine скрипт скачает сам.</p>
+        <div class="code">
+          <button class="copy" type="button">копировать</button>
+          <pre><code>git clone https://github.com/ccclosed/Pagh-OS
+cd Pagh-OS
+./build.sh --release --stage
+./run.sh --release</code></pre>
+        </div>
+        <a class="btn btn-ghost btn-wide" href="https://github.com/ccclosed/Pagh-OS#быстрый-старт" target="_blank" rel="noopener">README: быстрый старт →</a>
+        <div class="card-links">
+          <a href="https://github.com/ccclosed/Pagh-OS/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a>
+          <a href="https://github.com/ccclosed/Pagh-OS/blob/main/setup-linux.sh" target="_blank" rel="noopener">setup-linux.sh</a>
+        </div>
+      </article>
+
+      <article class="card reveal">
+        <div class="card-head">
+          <span class="glyph" aria-hidden="true">⊞</span>
+          <h3>Windows</h3>
+          <span class="meta">run.cmd · x64</span>
+        </div>
+        <p><code>run.cmd</code> проводит весь конвейер: <code>cargo build</code>, линковка <code>PAGH.elf</code>, staging ESP и QEMU с e1000.</p>
+        <div class="code">
+          <button class="copy" type="button">копировать</button>
+          <pre><code>run.cmd build
+run.cmd run
+run.cmd run release</code></pre>
+        </div>
+        <a class="btn btn-ghost btn-wide" href="https://github.com/ccclosed/Pagh-OS#windows" target="_blank" rel="noopener">Инструкция →</a>
+        <div class="card-links">
+          <a href="https://github.com/ccclosed/Pagh-OS/blob/main/run.cmd" target="_blank" rel="noopener">run.cmd</a>
+          <a href="https://github.com/ccclosed/Pagh-OS/blob/main/docs" target="_blank" rel="noopener">docs/</a>
+        </div>
+      </article>
+    </div>
+
+    <p class="note reveal"><b>pagh не форматирует диск сам при загрузке.</b> Он листит видимые разделы и ждёт: форматирование — только по явному <code>F</code> и вводу имени раздела обратно, а 20-секундный таймаут выбирает неразрушающий путь. Подключайте образ к выделенному пустому разделу или диску.</p>
+  </div>
+</section>
+
+<!-- ── features ────────────────────────────────────────────────────────── -->
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <span class="eyebrow">подсистемы</span>
+        <h2>Каждая подсистема — своя</h2>
+        <p class="lede">Ни одного внешнего сетевого крейта, ни готового TCP/IP, ни готовой ФС. Всё, что ниже, живёт в <code>src/</code> и документирует себя.</p>
+      </div>
+      <a class="link-more" href="https://github.com/ccclosed/Pagh-OS/blob/main/src/README.md" target="_blank" rel="noopener">src/README.md →</a>
+    </div>
+
+    <div class="feature-grid reveal">
+      <article class="feature">
+        <div class="feature-top"><span class="glyph" aria-hidden="true">▛</span><h3>Ядро и память</h3><span class="tag">arch · memory</span></div>
+        <p>GDT/IDT/TSS/IST, битмапный PMM, 4-уровневый VMM с <code>map_mmio</code>, куча на galloc, ACPI (MADT), LAPIC и I/O APIC. SSE включается для ring 3, само ядро — soft-float.</p>
+        <ul><li>no_std</li><li>SMEP</li><li>W^X / NX</li></ul>
+      </article>
+
+      <article class="feature">
+        <div class="feature-top"><span class="glyph" aria-hidden="true">⌁</span><h3>Загрузка</h3><span class="tag">boot · drivers</span></div>
+        <p>Limine/UEFI поднимает ядро, framebuffer-консоль 1280×800 получает цветной prompt и статус-строку. Disk-меню листит разделы и ничего не стирает без человека.</p>
+        <ul><li>Limine</li><li>OVMF</li><li>disk-меню</li></ul>
+      </article>
+
+      <article class="feature">
+        <div class="feature-top"><span class="glyph" aria-hidden="true">⛁</span><h3>Файлы</h3><span class="tag">fs · vfs</span></div>
+        <p>ext2-совместимая read/write ФС с несколькими группами блоков и журналом write-ahead-log: большие записи коммитятся ограниченными порциями, том масштаба GiB. virtio-blk, NVMe, GPT/MBR.</p>
+        <ul><li>ext2</li><li>WAL</li><li>NVMe</li></ul>
+      </article>
+
+      <article class="feature">
+        <div class="feature-top"><span class="glyph" aria-hidden="true">⇄</span><h3>Сеть</h3><span class="tag">net</span></div>
+        <p>Свой dual-stack TCP/IP: ARP, ICMP, DHCPv4, IPv6 NDP/SLAAC, TCP с window scaling, SACK и Reno, UDP-сокеты, DNS A+AAAA. Поверх e1000 или USB-RNDIS (тетеринг телефона).</p>
+        <ul><li>IPv4 + IPv6</li><li>TCP/SACK</li><li>RNDIS</li></ul>
+      </article>
+
+      <article class="feature">
+        <div class="feature-top"><span class="glyph" aria-hidden="true">▤</span><h3>GUI во framebuffer</h3><span class="tag">drivers · shell</span></div>
+        <p>Консоль рисует через RAM shadow buffer и выталкивает кадр один раз: простаивающий shell спит. 2D-примитивы, программный курсор, окно <code>paint</code> с палитрой, редактор <code>nano+</code>, панель <code>settings</code>.</p>
+        <ul><li>paint</li><li>nano+</li><li>settings</li></ul>
+      </article>
+
+      <article class="feature">
+        <div class="feature-top"><span class="glyph" aria-hidden="true">◫</span><h3>Процессы</h3><span class="tag">task</span></div>
+        <p>Вытесняющий round-robin планировщик ~1 кГц, потоки ядра, ring-3 процессы, <code>SYSCALL</code>/<code>int 0x80</code>, POSIX-сигналы, process groups и job control, <code>fork</code>/<code>clone</code> с COW.</p>
+        <ul><li>ring 3</li><li>signals</li><li>job control</li></ul>
+      </article>
+
+      <article class="feature">
+        <div class="feature-top"><span class="glyph" aria-hidden="true">λ</span><h3>Linux-бинарники</h3><span class="tag">linux</span></div>
+        <p>Статические и glibc-dynamic ELF x86_64 исполняются в ring 3: <code>epoll</code>/<code>eventfd</code>, unix-сокеты, raw-mode <code>termios</code>, синтетический procfs. Внутри работает <strong>CPython 3.16</strong> и Lua 5.5.</p>
+        <ul><li>glibc ELF</li><li>CPython</li><li>procfs</li></ul>
+      </article>
+
+      <article class="feature">
+        <div class="feature-top"><span class="glyph" aria-hidden="true">▣</span><h3>apt по HTTPS</h3><span class="tag">pkg</span></div>
+        <p><code>apt update</code>/<code>install</code> скачивает Debian-индекс по TLS 1.3, потоково разжимает gzip/xz/zstd и ставит <code>.deb</code>. Три независимых проверки: сертификат, подпись <code>InRelease</code>, SHA-256 и размер.</p>
+        <ul><li>TLS 1.3</li><li>OpenPGP</li><li>sha256</li></ul>
+      </article>
+
+      <article class="feature">
+        <div class="feature-top"><span class="glyph" aria-hidden="true">⌸</span><h3>USB</h3><span class="tag">drivers</span></div>
+        <p>Собственный xHCI: клавиатуры и мыши по boot-протоколу, hub-тайминги как в <code>hub.c</code>, Reset Endpoint при сбое. Плюс RNDIS поверх того же контроллера — сеть через телефон.</p>
+        <ul><li>xHCI</li><li>HID</li><li>RNDIS</li></ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ── screenshots ─────────────────────────────────────────────────────── -->
+<section class="section" id="shots">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <span class="eyebrow">скриншоты</span>
+        <h2>Всё это — сырой framebuffer</h2>
+        <p class="lede">Каждый кадр — снимок QEMU 1280×800: эти пиксели рисует само ядро. Ни хостового рендеринга шрифтов, ни сборки скриншотов.</p>
+      </div>
+      <a class="link-more" href="https://github.com/ccclosed/Pagh-OS/blob/main/README.md#скриншоты" target="_blank" rel="noopener">Все кадры →</a>
+    </div>
+
+    <figure class="demo-card reveal">
+      <img src="assets/img/demo.gif" alt="Запись pagh в QEMU: shell, paint, nano+ и темы" width="960" height="600" loading="lazy">
+      <figcaption class="demo-meta">
+        <span><b>Демо из QEMU</b> — shell, paint, nano+, темы</span>
+        <span><a href="https://github.com/ccclosed/Pagh-OS/blob/main/docs/demo.mp4" target="_blank" rel="noopener">docs/demo.mp4 ↗</a> · <a href="https://github.com/ccclosed/Pagh-OS/blob/main/docs/demo.gif" target="_blank" rel="noopener">gif</a></span>
+      </figcaption>
+    </figure>
+
+    <div class="shots">
+      <button class="shot" type="button" data-full="assets/img/shell.png" data-title="Интерактивный shell">
+        <img src="assets/img/shell.png" alt="Консоль pagh: ifconfig, ls, cat и цветной prompt" width="1280" height="800" loading="lazy">
+        <figcaption><span>Shell: prompt, история, completion</span><span>console</span></figcaption>
+      </button>
+      <button class="shot" type="button" data-full="assets/img/paint.png" data-title="Приложение paint">
+        <img src="assets/img/paint.png" alt="Окно paint: палитра, инструменты и нарисованные фигуры" width="1280" height="800" loading="lazy">
+        <figcaption><span>paint: окно, палитра, инструменты</span><span>ring 3</span></figcaption>
+      </button>
+      <button class="shot" type="button" data-full="assets/img/nano.png" data-title="Редактор nano+">
+        <img src="assets/img/nano.png" alt="Полноэкранный редактор nano+ с файловым деревом" width="1280" height="800" loading="lazy">
+        <figcaption><span>nano+: дерево файлов, undo</span><span>fullscreen</span></figcaption>
+      </button>
+      <button class="shot" type="button" data-full="assets/img/settings.png" data-title="Панель settings">
+        <img src="assets/img/settings.png" alt="Панель settings с выбором темы и обоев" width="1280" height="800" loading="lazy">
+        <figcaption><span>settings: темы и обои</span><span>live repaint</span></figcaption>
+      </button>
+      <button class="shot" type="button" data-full="assets/img/themes.png" data-title="Тема и обои">
+        <img src="assets/img/themes.png" alt="Тема и обои, применённые к работающей консоли" width="1280" height="800" loading="lazy">
+        <figcaption><span>Тема и обои на живой консоли</span><span>redraw</span></figcaption>
+      </button>
+      <button class="shot" type="button" data-full="assets/img/apt.png" data-title="apt update по HTTPS">
+        <img src="assets/img/apt.png" alt="apt update: загрузка индекса Debian по TLS 1.3" width="1280" height="800" loading="lazy">
+        <figcaption><span>apt update по HTTPS</span><span>TLS 1.3</span></figcaption>
+      </button>
+      <button class="shot" type="button" data-full="assets/img/selftest.png" data-title="In-QEMU selftest">
+        <img src="assets/img/selftest.png" alt="selftest: прогон property-набора ядра и вердикт на serial" width="1280" height="800" loading="lazy">
+        <figcaption><span>selftest: вердикт на serial</span><span>in-kernel</span></figcaption>
+      </button>
+      <button class="shot" type="button" data-full="assets/img/selection.png" data-title="Выделение мышью">
+        <img src="assets/img/selection.png" alt="Выделение текста консоли мышью и клипборд сессии" width="1280" height="800" loading="lazy">
+        <figcaption><span>Выделение мышью и клипборд</span><span>mouse</span></figcaption>
+      </button>
+      <div class="shots-cta">
+        <div>
+          <div>ещё 12 кадров и MP4</div>
+          <div><a href="https://github.com/ccclosed/Pagh-OS/tree/main/docs" target="_blank" rel="noopener">docs/ на GitHub →</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── architecture ────────────────────────────────────────────────────── -->
+<section class="section" id="arch">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <span class="eyebrow">архитектура</span>
+        <h2>Один крейт. Плоское дерево.</h2>
+        <p class="lede">Подсистемы не прячутся за внешними сервисами: это модули одного <code>src/</code>, и каждый папка-модуль объясняет свой дизайн.</p>
+      </div>
+      <a class="link-more" href="https://github.com/ccclosed/Pagh-OS/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md →</a>
+    </div>
+
+    <div class="arch-grid">
+      <div class="arch-list reveal">
+        <div class="arch-row"><code>arch/</code><span>CPU: GDT/IDT/TSS/IST, SYSCALL, int 0x80, Linux-compat</span></div>
+        <div class="arch-row"><code>memory/</code><span>PMM, 4-уровневый VMM, map_mmio, куча galloc</span></div>
+        <div class="arch-row"><code>drivers/</code><span>framebuffer, PS/2, virtio, NVMe, xHCI, HID, RNDIS</span></div>
+        <div class="arch-row"><code>fs/</code><span>ext2 read/write, WAL-журнал, GPT/MBR</span></div>
+        <div class="arch-row"><code>vfs/</code><span>узлы, права, монтирования, синтетический procfs</span></div>
+        <div class="arch-row"><code>net/</code><span>ARP/ICMP/DHCPv4, IPv6 NDP/SLAAC, TCP/SACK, DNS</span></div>
+        <div class="arch-row"><code>pkg/</code><span>apt: индексы, .deb, OpenPGP, TLS 1.3</span></div>
+        <div class="arch-row"><code>task/</code><span>планировщик, потоки, сигналы, FPU, Linux-compat</span></div>
+        <div class="arch-row"><code>shell/</code><span>интерпретатор, команды и GUI-приложения</span></div>
+        <div class="arch-row"><code>security/</code><span>unsafe-policy и границы ring 3</span></div>
+        <div class="arch-row"><code>boot.rs</code><span>порядок загрузки, каждая фаза — fallible-шаг</span></div>
+        <div class="arch-row"><code>provision.rs</code><span>идемпотентный first-boot: скелет /mnt и релиз</span></div>
+      </div>
+
+      <div class="arch-side reveal">
+        <h3>Порядок загрузки</h3>
+        <div class="code">
+          <button class="copy" type="button">копировать</button>
+          <pre><code>serial → base revision → limine
+gdt + idt → syscalls → pmm
+vmm → heap → apic → drivers
+virtio → scheduler → vfs
+ext2 mounted at /mnt
+net → interrupts enabled
+<span class="c"># DHCP lease приходит асинхронно</span></code></pre>
+        </div>
+        <h3>Цифры</h3>
+        <ul>
+          <li><b>1280×800</b> — framebuffer, 32 bpp</li>
+          <li><b>8×18</b> — ячейка антиалиасного Fira Code</li>
+          <li><b>~1 кГц</b> — тик вытесняющего планировщика</li>
+          <li><b>0</b> — внешних сетевых крейтов</li>
+          <li><b>4</b> — запиненных корневых CA для TLS</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── honesty ─────────────────────────────────────────────────────────── -->
+<section class="section" id="security">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <span class="eyebrow">безопасность</span>
+        <h2>Честно: что есть и чего нет</h2>
+        <p class="lede">Модель безопасности названа прямо, вместе с пробелами. Это документация, а не маркетинг.</p>
+      </div>
+      <a class="link-more" href="https://github.com/ccclosed/Pagh-OS/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md →</a>
+    </div>
+
+    <div class="cards-2 honest">
+      <article class="card reveal">
+        <h3><span class="dot dot-ok" aria-hidden="true"></span>Что реализовано</h3>
+        <ul>
+          <li>Ring 3 изолирован пейджингом: бит U/S, W^X/NX-листы, MMIO устройств недоступен пользователю.</li>
+          <li>Буферы сисколлов проверяются на диапазон против пользовательских маппингов; read-only out-указатель не вешает CPU.</li>
+          <li>SMEP включается, когда CPUID о нём сообщает.</li>
+          <li>Учётные данные процессов: real/effective/saved uid+gid, <code>set*id</code>, POSIX owner/group/other на <code>open</code>, <code>execve</code> и мутациях каталогов.</li>
+          <li>TLS fail-closed против четырёх запиненных корней; apt проверяет <code>InRelease</code>, затем SHA-256 <em>и</em> размер <code>Packages</code> и каждого <code>.deb</code>.</li>
+        </ul>
+      </article>
+
+      <article class="card reveal">
+        <h3><span class="dot dot-warn" aria-hidden="true"></span>Чего ещё нет</h3>
+        <ul>
+          <li>Логина и учётных записей: shell и порождённые ядром процессы стартуют root.</li>
+          <li>Повышения через setuid-бинарники, дополнительных групп, ACL и <code>fsuid</code>.</li>
+          <li>Capabilities, seccomp, LSM и audit trail.</li>
+          <li>ASLR/KASLR, KPTI, SMAP; namespaces адресного пространства и монтирования.</li>
+          <li>Проверок sticky-бита и владельца каталога; SMEP — единственная аппаратная митигация.</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="warn-box reveal">
+      <span class="glyph" aria-hidden="true">⚠</span>
+      <div><b>pagh — хобби/учебное ядро, а не граница безопасности.</b> Цепочка TLS + OpenPGP + digest аутентифицирует <em>пакеты</em> против враждебного зеркала; она не сдерживает враждебный локальный код. Не запускайте недоверенные бинарники и не выставляйте это ядро в сеть, которую не контролируете. <a href="https://github.com/ccclosed/Pagh-OS/blob/main/docs/security-model.md" target="_blank" rel="noopener">Полная модель →</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── tests ───────────────────────────────────────────────────────────── -->
+<section class="section" id="tests">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <span class="eyebrow">проверяемость</span>
+        <h2>Проверяется, а не декларируется</h2>
+        <p class="lede">Шесть гейтов на каждый коммит: форматирование, debug- и release-сборка, host-тесты, unsafe-policy и сверка утверждений AGENTS.md с деревом.</p>
+      </div>
+      <a class="link-more" href="https://github.com/ccclosed/Pagh-OS/blob/main/tools/README.md" target="_blank" rel="noopener">tools/README.md →</a>
+    </div>
+
+    <div class="stats reveal">
+      <div class="stat"><b>561</b><span>host property-тестов, 0 падений</span></div>
+      <div class="stat"><b>6</b><span>CI-гейтов на каждый коммит</span></div>
+      <div class="stat"><b>~1 кГц</b><span>тик вытесняющего планировщика</span></div>
+      <div class="stat"><b>24 с</b><span>демо: boot, shell, paint, nano+</span></div>
+    </div>
+
+    <div class="cards-3">
+      <article class="card reveal">
+        <div class="card-head"><span class="glyph" aria-hidden="true">✓</span><h3>selftest в ядре</h3><span class="meta">serial</span></div>
+        <p>Команда <code>selftest</code> гоняет property/regression-набор против живого состояния ядра: PMM, VMM, ext2, VFS, планировщик, сигналы, парсеры TLS/apt. Вердикт печатается машинно-проверяемым на serial.</p>
+      </article>
+      <article class="card reveal">
+        <div class="card-head"><span class="glyph" aria-hidden="true">⌗</span><h3>host property-тесты</h3><span class="meta">proptest</span></div>
+        <p>Чистая логика ядра подключается в <code>host-tests/</code> через <code>#[path]</code> — тесты исполняют те же файлы, которые компилирует ядро. Новый чистый модуль без свойства считается подозрительным.</p>
+      </article>
+      <article class="card reveal">
+        <div class="card-head"><span class="glyph" aria-hidden="true">▶</span><h3>E2E в QEMU</h3><span class="meta">tools/e2e.py</span></div>
+        <p>Гостевой драйвер прогоняет сценарии <code>selftest</code>, <code>local-mirror</code>, <code>live-update</code>, <code>bigindex</code> и <code>shell</code>. Маркер <code>[BOOTID]</code> доказывает, что вердикт принадлежит именно этому прогону.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ── cta ─────────────────────────────────────────────────────────────── -->
+<section class="cta" id="try">
+  <div class="wrap reveal">
+    <span class="eyebrow">попробовать</span>
+    <h2>Загрузите pagh за пару минут</h2>
+    <p>Демо-образу нужны только <code>qemu-system-x86_64</code> и OVMF. <code>Ctrl+Alt+G</code> отпускает мышь, <code>quit</code> выходит. Сборка запускается без вопросов — install python3 уже из shell.</p>
+    <div class="code code-big">
+      <button class="copy" type="button">копировать</button>
+      <pre><code>tar xzf pagh-demo-x86_64.tar.gz
+cd pagh-demo-x86_64
+./run.sh</code></pre>
+    </div>
+    <div class="cta-actions">
+      <a class="btn" href="https://github.com/ccclosed/Pagh-OS/releases/tag/2.18.12-demo" target="_blank" rel="noopener">
+        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 2v8m0 0 3-3m-3 3L5 7M2.5 12.5v1h11v-1"/></svg>
+        Скачать demo bundle
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/ccclosed/Pagh-OS" target="_blank" rel="noopener">
+        <svg class="ico" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ── footer ──────────────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="#top">
+          <svg class="brand-mark" viewBox="0 0 20 20" aria-hidden="true">
+            <g fill="currentColor">
+              <rect x="2" y="2" width="4" height="4"/><rect x="2" y="6" width="4" height="4"/>
+              <rect x="2" y="10" width="4" height="4"/><rect x="2" y="14" width="4" height="4"/>
+              <rect x="6" y="2" width="4" height="4"/><rect x="10" y="2" width="4" height="4"/>
+              <rect x="14" y="6" width="4" height="4"/><rect x="6" y="10" width="4" height="4"/>
+              <rect x="10" y="10" width="4" height="4"/><rect x="14" y="10" width="4" height="4"/>
+            </g>
+          </svg>
+          <span>pagh</span>
+        </a>
+        <p>Небольшое 64-битное ядро на Rust: ext2 + WAL, свой TCP/IP, framebuffer-GUI и apt по HTTPS — на реальном UEFI.</p>
+      </div>
+
+      <div>
+        <h4>Проект</h4>
+        <ul>
+          <li><a href="https://github.com/ccclosed/Pagh-OS" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/releases" target="_blank" rel="noopener">Релизы</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4>Документы</h4>
+        <ul>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/blob/main/README.md" target="_blank" rel="noopener">README</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/blob/main/docs/security-model.md" target="_blank" rel="noopener">Модель безопасности</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/blob/main/NETWORK-APT.md" target="_blank" rel="noopener">apt и TLS</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/blob/main/HARDENING.md" target="_blank" rel="noopener">HARDENING</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/blob/main/MINIRUST.md" target="_blank" rel="noopener">MINIRUST</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4>Участие</h4>
+        <ul>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/issues" target="_blank" rel="noopener">Issues</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/pulls" target="_blank" rel="noopener">Pull requests</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING</a></li>
+          <li><a href="https://github.com/ccclosed/Pagh-OS/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener">Code of conduct</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© <span data-year>2026</span> ccclosed · MIT · pagh v2.22.9</span>
+      <span>дизайн-язык: <a href="https://omarchy.org/" target="_blank" rel="noopener">omarchy.org</a> · токены сняты через designlang (MCP)</span>
+    </div>
+  </div>
+</footer>
+
+<dialog class="lightbox" data-lightbox aria-label="Просмотр скриншота">
+  <div class="lb-bar"><span data-lb-title></span><button type="button" data-lb-close>закрыть Esc</button></div>
+  <img data-lb-img alt="">
+</dialog>
+
+<script src="script.js" defer></script>
+</body>
+</html>
