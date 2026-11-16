@@ -9,7 +9,7 @@
 ## Запустить
 
 ```sh
-cd site
+git clone https://github.com/ccclosed/pagh-os-site && cd pagh-os-site
 python3 -m http.server 8765
 # http://127.0.0.1:8765/
 ```
